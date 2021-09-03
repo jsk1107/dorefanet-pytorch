@@ -123,7 +123,7 @@ class ResNet20(torch.nn.Module):
         layers: List[int],
         w_bits: int,
         a_bits: int,
-        num_classes: int=1000
+        num_classes: int=10
     ) -> None:
         super(ResNet20, self).__init__()
 
