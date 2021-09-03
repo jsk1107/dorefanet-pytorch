@@ -1,4 +1,3 @@
-# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Original author: jsk1107
 
@@ -24,11 +23,11 @@ class Quantizer(torch.nn.Module):
         self.name = name
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.name == 'weight' and (torch.min(x) < -1 or torch.max(x) > 1):
-            raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
-        if self.name == 'activation' and torch.min(x) < 0 or torch.max(x) > 1:
-            raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
-        return Quantize.apply(x, self.bits)
+        # if self.name == 'weight' and (torch.min(x) < -1 or torch.max(x) > 1):
+        #     raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
+        # if self.name == 'activation' and torch.min(x) < 0 or torch.max(x) > 1:
+        #     raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
+        return Quantize.apply(x, self.bits, self.name)
 
 
 class Quantize(torch.autograd.Function):
@@ -51,7 +50,7 @@ class Quantize(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx: object, x: Tensor, k: int) -> Tensor:
+    def forward(ctx: object, x: Tensor, k: int, name: str) -> Tensor:
         r"""
         k-bits 양자화 변환.
 
@@ -69,8 +68,19 @@ class Quantize(torch.autograd.Function):
         r_o: Tensor
             k-bits로 양자화가 완료된 값.
         """
-        q = 2 ** k - 1
-        r_o = torch.round(q * x) / q
+
+        if name == 'weight' and k == 1:
+            r_o = torch.sign(x)
+            r_o[r_o == 0] == 1
+        else:
+            q = 2 ** k - 1
+            r_o = torch.round(q * x) / q
+
+        # if name == 'weight' and (torch.min(r_o) < -1 or torch.max(r_o) > 1):
+        #     raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
+        # if name == 'activation' and torch.min(r_o) < 0 or torch.max(r_o) > 1:
+        #     raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
+
         return r_o
 
     @staticmethod
@@ -94,7 +104,7 @@ class Quantize(torch.autograd.Function):
         """
 
         grad_input = grad_out.clone()
-        return grad_input, None
+        return grad_input, None, None
 
 
 class QuantizationWeight(torch.nn.Module):
@@ -136,9 +146,7 @@ class QuantizationWeight(torch.nn.Module):
         """
         if self.bits == 1:
             mu = torch.mean(torch.abs(x)).detach() # mu는 상수이기 때문에 계산그래프에서 제외해야함.
-            r_i = torch.sign(x / mu)
-            r_i[r_i == 0] = 1
-            w_q = r_i * mu
+            w_q = self.quantizer(x / mu) * mu
         elif self.bits == 32:
             w_q = x
         else:
@@ -174,7 +182,7 @@ class QuantizationActivation(torch.nn.Module):
         if self.bits == 32:
             a_q = x
         else:
-            a_q = self.quantizer(torch.clip(x, 0, 1))
+            a_q = self.quantizer(torch.clamp(x, 0, 1))
         return a_q
 
 
