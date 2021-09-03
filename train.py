@@ -4,9 +4,12 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms as T
 from tqdm import tqdm
+from logger import get_logger
 
 
-def main():
+logger = get_logger('./log', log_config='./logging.json')
+
+def main(**kwarg):
     transform_train = T.Compose([
                            T.RandomCrop(32, padding=4),
                            T.RandomHorizontalFlip(),
@@ -30,16 +33,15 @@ def main():
     else:
         device = 'cpu'
 
-    kwarg = {'w_bits': 1, 'a_bits': 2, 'num_classes': 10}
-    # model = alexnet(**kwarg)
+    # 실험 조건
     model = resnet20(**kwarg)
-    print(model)
     model.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optim = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=0.0001)
+    optim = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[100, 150, 180], gamma=0.1)
-
     EPOCHS = 200
+
+    logger.info(f'W_bits: {kwarg.get("w_bits")} | A_bits: {kwarg.get("a_bits")}')
     for EPOCH in range(EPOCHS):
         model.train()
         train_loss = 0.
@@ -55,11 +57,10 @@ def main():
                 loss = criterion(outputs, targets)
                 train_loss += loss
                 tbar.set_description(
-                    f'EPOCH: {EPOCH} || total_train_loss: {train_loss / (i+1):3f} batch_train_loss: {loss:.3f}')
+                    f'EPOCH: {EPOCH + 1} | total_train_loss: {train_loss / (i+1):.4f} | batch_train_loss: {loss:.4f}')
                 loss.backward()
                 optim.step()
             scheduler.step(EPOCH)
-
         model.eval()
         val_loss = 0.
         total = 0
@@ -76,17 +77,24 @@ def main():
                 loss = criterion(outputs, targets)
                 val_loss += loss
                 tbar.set_description(
-                    f'EPOCH: {EPOCH} || total_train_loss: {val_loss / (i + 1):3f} batch_train_loss: {loss:.3f}')
+                    f'EPOCH: {EPOCH + 1} | val_train_loss: {val_loss / (i + 1):.4f} | batch_val_loss: {loss:.4f}')
                 _, predicted = torch.max(outputs.data, 1)
                 total += targets.size(0)
                 correct += (predicted == targets).sum().item()
 
-        print(f'\n Accuracy of the network on the 10000 test images: {round(100 * correct / total, 3)}% '
-              f'|| Curruent Learning rate: {scheduler.get_lr()[0]}')
+        logger.info(f'EPOCH: {EPOCH + 1} | '
+                    f'Loss: {val_loss / (i + 1):.4f} | '
+                    f'Accuracy: {100 * correct / total:.4f}%'
+                    )
 
     state_dict = {'model_state_dict': model.state_dict()}
-    torch.save(state_dict, './model.pt')
+    torch.save(state_dict, f'./model_w_{w_bits}_a{a_bits}.pt')
 
 
 if __name__ == '__main__':
-    main()
+    # w_a = [[1, 1], [1, 2], [1, 4], [1, 32], [2, 2], [2, 4], [2, 32], [4, 4], [4, 32], [32, 32]]
+    w_a = [[1, 1]]
+    for cfg in w_a:
+        w_bits, a_bits = cfg
+        kwarg = {'w_bits': w_bits, 'a_bits': a_bits}
+        main(**kwarg)
