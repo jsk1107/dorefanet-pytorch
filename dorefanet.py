@@ -69,17 +69,17 @@ class Quantize(torch.autograd.Function):
             k-bits로 양자화가 완료된 값.
         """
 
+        # if name == 'weight' and (torch.min(r_o) < -1 or torch.max(r_o) > 1):
+        #     raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
+        # if name == 'activation' and torch.min(r_o) < 0 or torch.max(r_o) > 1:
+        #     raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
+
         if name == 'weight' and k == 1:
             r_o = torch.sign(x)
             r_o[r_o == 0] == 1
         else:
             q = 2 ** k - 1
             r_o = torch.round(q * x) / q
-
-        # if name == 'weight' and (torch.min(r_o) < -1 or torch.max(r_o) > 1):
-        #     raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
-        # if name == 'activation' and torch.min(r_o) < 0 or torch.max(r_o) > 1:
-        #     raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
 
         return r_o
 
@@ -150,6 +150,9 @@ class QuantizationWeight(torch.nn.Module):
         elif self.bits == 32:
             w_q = x
         else:
+            # FIXME: torch.tanh(x)에 대해서 역전파가 수행되는거 같다.
+            #  여기를 detach() 하면 계산그래프에서 떨어지기 때문에 Parameter Update가 안됨.
+            #  x의 계산그래프를 가지고 가면서 torch.tanh를 할 수 있는 방법을 찾아야함.
             weight = torch.tanh(x)
             max_w = torch.max(torch.abs(weight)).detach() # max_w는 상수이기 때문에 계산그래프에서 제외해야함.
             r_i = (weight / (2 * max_w)) + 0.5
