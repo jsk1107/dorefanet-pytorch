@@ -42,6 +42,8 @@ def main(**kwarg):
     EPOCHS = 200
 
     logger.info(f'W_bits: {kwarg.get("w_bits")} | A_bits: {kwarg.get("a_bits")}')
+
+    best_acc = 0.
     for EPOCH in range(EPOCHS):
         model.train()
         train_loss = 0.
@@ -54,6 +56,10 @@ def main(**kwarg):
                 imgs, targets = imgs.to(device), targets.to(device)
 
                 outputs = model(imgs)
+                print(outputs)
+                print(outputs.shape)
+                print(targets)
+                print(targets.shape)
                 loss = criterion(outputs, targets)
                 train_loss += loss
                 tbar.set_description(
@@ -61,6 +67,7 @@ def main(**kwarg):
                 loss.backward()
                 optim.step()
             scheduler.step(EPOCH)
+
         model.eval()
         val_loss = 0.
         total = 0
@@ -81,19 +88,21 @@ def main(**kwarg):
                 _, predicted = torch.max(outputs.data, 1)
                 total += targets.size(0)
                 correct += (predicted == targets).sum().item()
-
+        acc = 100 * correct / total
         logger.info(f'EPOCH: {EPOCH + 1} | '
                     f'Loss: {val_loss / (i + 1):.4f} | '
-                    f'Accuracy: {100 * correct / total:.4f}%'
+                    f'Accuracy: {acc:.4f}%'
                     )
 
-    state_dict = {'model_state_dict': model.state_dict()}
-    torch.save(state_dict, f'./model_w_{w_bits}_a{a_bits}.pt')
-
+        if best_acc < acc:
+            best_acc = acc
+            state_dict = {'model_state_dict': model.state_dict(),
+                          'ECPOH': EPOCH}
+            torch.save(state_dict, f'./model_w_{w_bits}_a{a_bits}.pt')
+    logger.info(f'Best_Acc: {best_acc:.4f}%')
 
 if __name__ == '__main__':
-    # w_a = [[1, 1], [1, 2], [1, 4], [1, 32], [2, 2], [2, 4], [2, 32], [4, 4], [4, 32], [32, 32]]
-    w_a = [[1, 1]]
+    w_a = [[2, 32], [4, 4], [4, 32], [32, 32]]
     for cfg in w_a:
         w_bits, a_bits = cfg
         kwarg = {'w_bits': w_bits, 'a_bits': a_bits}
