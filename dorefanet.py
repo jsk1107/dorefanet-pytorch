@@ -73,7 +73,7 @@ class Quantize(torch.autograd.Function):
         #     raise ValueError('Weight는 양자화 되기 전, 입력값이 -1 <= x <= 1 사이여야 합니다.')
         # if name == 'activation' and torch.min(r_o) < 0 or torch.max(r_o) > 1:
         #     raise ValueError('Activation은 양자화 되기 전, 입력값이 0 <= x <= 1 사이여야 합니다.')
-
+        ctx.save_for_backward(x)
         if name == 'weight' and k == 1:
             r_o = torch.sign(x)
             r_o[r_o == 0] == 1
@@ -102,8 +102,10 @@ class Quantize(torch.autograd.Function):
         grad_input: Tensor
             앞쪽 레이어로 전파되어 나가는 기울기.
         """
+        x, = ctx.saved_tensors
+        mask = torch.abs(x) <= 1
+        grad_input = grad_out * mask
 
-        grad_input = grad_out.clone()
         return grad_input, None, None
 
 
