@@ -201,3 +201,16 @@ def resnet20(w_bits, a_bits, **kwargs):
     model = ResNet20(BasicBlock, [3, 3, 3], w_bits, a_bits, **kwargs)
 
     return model
+
+
+if __name__ == '__main__':
+    w_bits, a_bits = 32, 32
+    model = resnet20(w_bits, a_bits)
+    print(model)
+
+    for i, (name, param) in enumerate(model.named_parameters()):
+        print(param)
+        print(name)
+
+        if i == 3:
+            break
