@@ -5,6 +5,7 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import transforms as T
 from tqdm import tqdm
 from logger import get_logger
+from torchsummary import summary
 
 
 logger = get_logger('./log', log_config='./logging.json')
@@ -35,6 +36,7 @@ def main(**kwarg):
 
     # 실험 조건
     model = resnet20(**kwarg)
+    # summary(model, (3, 32, 32), depth=3)
     model.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
     optim = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
@@ -56,10 +58,6 @@ def main(**kwarg):
                 imgs, targets = imgs.to(device), targets.to(device)
 
                 outputs = model(imgs)
-                print(outputs)
-                print(outputs.shape)
-                print(targets)
-                print(targets.shape)
                 loss = criterion(outputs, targets)
                 train_loss += loss
                 tbar.set_description(
